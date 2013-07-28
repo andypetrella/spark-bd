@@ -32,13 +32,15 @@ object P2 extends App {
   //init spark
   val ssc = new StreamingContext("local", "Project2", Seconds(5))
 
+  val topics = args.toSeq
+
   //create twitter stream using filter from the args list
-  val stream = ssc.twitterStream(None, args.toSeq)
+  val stream = ssc.twitterStream(None, topics)
 
   //map tweets to their sentiment score
   val statusWithSentiment = stream.map{ status =>
     val text = status.getText.toLowerCase
-    val scoreNWords = sentiments.foldLeft((0, List():List[String])) { case ((score, ss), (w, s)) =>
+    val (score, words) = sentiments.foldLeft((0, List():List[String])) { case ((score, ss), (w, s)) =>
       if (text == w
           || text.startsWith(w + " ")
           || text.endsWith(" " + w)
@@ -48,7 +50,7 @@ object P2 extends App {
         (score, ss)
       }
     }
-    (scoreNWords._1, scoreNWords._2, status)
+    (score, words, status)
   }
 
   val topSentimental60sec =
@@ -56,22 +58,59 @@ object P2 extends App {
       .map{ case (x, y, z) =>
         (x, List((z,y)))
       }
-      .reduceByKeyAndWindow(_ ::: _, Seconds(60))
-      //.map{case (score, tweets) => (tweets, score)}
-      .transform(_.sortByKey(false))
 
-  // Print popular hashtags
-  topSentimental60sec.foreach(rdd => {
-    val topList = rdd.take(5)
-    println("\nMost sentimental tweets in last 60 seconds (%s total):".format(rdd.count()))
-    topList
-      .foreach{case (sentiment, statuses) =>
-        println("SENTIMENT :: " + sentiment)
-        println("TWEETS :: ")
-        statuses.map(x => "   " + x._1.getText + " |>>| " + x._2.mkString("|@|")).foreach(println)
-        println("|||||||||||||||||||||||||||||||||||||||||||||||||||||")
+
+  val score60secGroupedByTopic =
+    topSentimental60sec
+      .filter { case (score, (status, words) :: Nil) => !words.isEmpty}
+      .flatMap { case (score, (status, words) :: Nil) =>
+        //produce one element by topic included in the status
+        // in the case where the status matches several topics...
+        topics
+          .filter(topic => status.getText.contains("#"+topic))
+          .map(topic => (topic, List((status, words, score))))
       }
-  })
+      .reduceByKeyAndWindow(_ ::: _, Seconds(60))
+      //for each topic => accScore, participatingTweets, allParticipatingSentiments
+      .mapValues(xs => (xs.map(_._3).sum, xs.map(_._1), xs.flatMap(_._2)))
+
+
+
+  val orderedTopSentimental60sec = topSentimental60sec
+                                    .reduceByKeyAndWindow(_ ::: _, Seconds(60))
+                                    .transform(_.sortByKey(false))
+
+  // Print most sentimental for every topics
+  //orderedTopSentimental60sec.foreach(rdd => {
+  //  val topList = rdd.take(5)
+  //  println("\nMost sentimental tweets in last 60 seconds (%s total):".format(rdd.count()))
+  //  topList
+  //    .foreach{case (sentiment, statuses) =>
+  //      println("SENTIMENT :: " + sentiment)
+  //      println("TWEETS :: ")
+  //      statuses.map(x => "   " + x._1.getText + " |>>| " + x._2.mkString("|@|")).foreach(println)
+  //      println("|||||||||||||||||||||||||||||||||||||||||||||||||||||")
+  //    }
+  //})
+
+  // Print most sentimental for every topics
+  score60secGroupedByTopic
+    .saveAsTextFiles("scoreByTopic", "60sec")
+
+  //.foreach(rdd => {
+  //  println("\nChange in sentiments by topic in last 60 seconds (%s total):".format(rdd.count()))
+  //  rdd
+  //    .foreach{case (topic, (score, tweets, words)) =>
+  //      println("TOPIC :: " + score)
+  //      println("TWEETS :: ")
+  //      tweets.foreach(t => println(t.getText))
+  //      println("WORDS :: ")
+  //      words.foreach(println)
+  //      println("|||||||||||||||||||||||||||||||||||||||||||||||||||||")
+  //    }
+  //})
+
+
 
   ssc.start()
 
