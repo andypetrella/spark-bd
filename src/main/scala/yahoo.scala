@@ -22,6 +22,9 @@ class Yahoo(feeder:String) extends Serializable {
 
 class YahooActorReceiver[T: ClassManifest](feeder:String, stocks:Seq[String]) extends Actor with Receiver {
 
+  //TODO maybe cache here the last trade time (t1) for each stock
+  // then not push the block if it didn't changed...
+
   lazy private val remotePublisher = context.actorFor(feeder)
 
   override def preStart = remotePublisher ! For(context.self, stocks)
@@ -69,6 +72,10 @@ class FeederActor extends Actor {
   import java.net.URL
 
   // http://cliffngan.net/a/13
+  // TODO probably:
+  //     add "e1"
+  //     use "c6" and "k2" rather than "c"
+
   val yahooResponseFormat = "sl1d1t1cv";
   val yahooService        = "http://finance.yahoo.com/d/quotes.csv?s=%s&f=%s&e=.csv";
 
