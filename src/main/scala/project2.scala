@@ -12,7 +12,21 @@ import spark.SparkContext._
 
 
 object Tick
-case class For(actor:ActorRef)
+case class For(actor:ActorRef, stocks:Seq[String])
+
+case class Stock(
+  id:String,
+  keywords:Seq[String]
+)
+
+object Stocks {
+  private[this] val seq = Seq(
+    Stock("GOOG", Seq("google", "android")),
+    Stock("APPL", Seq("apple", "ios"))
+  )
+
+  val defaults = seq.map(x => (x.id, x)).toMap
+}
 
 object P2 extends App {
   //load the conf
@@ -24,13 +38,15 @@ object P2 extends App {
   //init spark
   implicit val ssc = new StreamingContext("local", "Project2", Seconds(5))
 
-  val topics = args.drop(1).toSeq
+  val topics = args.drop(1).toSeq.map{ t =>
+    Stocks.defaults.get(t).getOrElse(Stock(t, Seq.empty))
+  }
 
   lazy val twitter = new Twitter(twitterAuth)
-  lazy val twitterDStream = twitter(topics)
+  lazy val twitterDStream = twitter(topics.map(_.id)) // FIXME: only take the id for now
 
   lazy val yahoo = new Yahoo("akka://sparkAkka@localhost:10123/user/FeederActor")
-  lazy val yahooDStream = yahoo(topics)
+  lazy val yahooDStream = yahoo(topics.map(_.id)) // FIXME: only take the id for now
 
   if (args(0) == "yahoo") {
     Yahoo.start

@@ -6,7 +6,11 @@ import spark.streaming.{Seconds, StreamingContext}
 import spark.streaming.StreamingContext._
 import spark.SparkContext._
 
+import twitter4j._
+
 import scala.collection.JavaConversions._
+
+case class TwitterStock(stock:String, sentiments:Seq[Sentiment], status:Status)
 
 class Twitter(twitterConfig:Config) {
 
@@ -37,7 +41,7 @@ class Twitter(twitterConfig:Config) {
       statusWithNotEmptySentiments
         .flatMap { case (ss, st) =>
           st.getHashtagEntities.map{_.getText}.collect {
-            case stock if stocks.contains(stock) => (stock, (ss, st))
+            case stock if stocks.contains(stock) => TwitterStock(stock, ss, st)
           }
         }
 
