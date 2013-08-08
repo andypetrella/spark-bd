@@ -15,22 +15,36 @@ import spark.SparkContext._
 class Yahoo(feeder:String) extends Serializable {
 
   def apply(stocks:Seq[String])(implicit @transient ssc:StreamingContext) = {
-    ssc.actorStream[String](Props(new YahooActorReceiver[YahooStock](feeder, stocks)), "YahooReceiver")
+    ssc.actorStream[YahooStock](Props(new YahooActorReceiver(feeder, stocks)), "YahooReceiver")
   }
 
 }
 
-class YahooActorReceiver[T: ClassManifest](feeder:String, stocks:Seq[String]) extends Actor with Receiver {
+class YahooActorReceiver(feeder:String, stocks:Seq[String]) extends Actor with Receiver {
 
-  //TODO maybe cache here the last trade time (t1) for each stock
+  // cache here the last change for each stock
   // then not push the block if it didn't changed...
+  var lasts:Map[String, YahooStock] = Map.empty
 
   lazy private val remotePublisher = context.actorFor(feeder)
 
   override def preStart = remotePublisher ! For(context.self, stocks)
 
   def receive = {
-    case msg ⇒ context.parent ! pushBlock(msg.asInstanceOf[T])
+    case msg ⇒ {
+      val y = msg.asInstanceOf[YahooStock]
+
+      val push = lasts
+                  .get(y.track)
+                  .map(_ != y)
+                  .getOrElse(true)
+
+      lasts = lasts + (y.track -> y)
+
+      if (push) {
+        context.parent ! pushBlock(y)
+      }
+    }
   }
 
   override def postStop() = () //remotePublisher ! UnsubscribeReceiver(context.self)
@@ -39,32 +53,27 @@ class YahooActorReceiver[T: ClassManifest](feeder:String, stocks:Seq[String]) ex
 
 case class YahooStock(
   track:String,
-  quote:Double,
+  trade:Double,
   date:String,
   time:String,
   delta:(Double, Double),
-  number:Int)
+  volume:Int)
 object YahooStock {
-  def clean(s:String) = s.replace("\"","")
+  def na(s:String, pre:String=>String=identity):Double = if (s == "N/A") Double.MinValue else pre(s).toDouble
 
-  def na(s:String):Double = if (s == "N/A") Double.MinValue else s.toDouble
-
-  def apply(a:Array[String]) = {
-    val _a = a.map(clean _)
-    new YahooStock(
-      _a(0).replace("\"",""),
-      na(_a(1)),
-      _a(2),
-      _a(3),
-      _a(4)
-        .split(" - ")
-        .toList match {
-          case "N/A"::"N/A"::Nil => (Double.MinValue, Double.MinValue)
-          case a::b::Nil => (na(a),na(b.init.mkString))
-          case _ => (Double.MinValue, Double.MinValue)
-        },
-      na(_a(5)).toInt
-    )
+  def create(a:Map[String, String]) = {
+    a.get("e1")
+      .flatMap(x => if (x=="N/A") Some(x) else None)
+      .map {_ =>
+       YahooStock(
+        track = a("s"),
+        trade = na(a("l1")),
+        date = a("d1"),
+        time = a("t1"),
+        delta = (na(a("c6")), na(a("p2"), _.init.mkString)),
+        volume = na(a("v")).toInt
+       )
+      }
   }
 }
 
@@ -72,14 +81,10 @@ class FeederActor extends Actor {
   import java.net.URL
 
   // http://cliffngan.net/a/13
-  // TODO probably:
-  //     add "e1"
-  //     use "c6" and "k2" rather than "c"
-
-  val yahooResponseFormat = "sl1d1t1cv";
+  val yahooResponseFormat = List("e1", "s", "l1", "d1", "t1", "c6", "p2", "v")
   val yahooService        = "http://finance.yahoo.com/d/quotes.csv?s=%s&f=%s&e=.csv";
 
-  def financeData(stocks:Seq[String]) = String.format(yahooService, stocks.mkString(","), yahooResponseFormat)
+  def financeData(stocks:Seq[String]) = String.format(yahooService, stocks.mkString(","), yahooResponseFormat.mkString)
 
   var url:Option[URL] = None
 
@@ -97,14 +102,20 @@ class FeederActor extends Actor {
         url.foreach { _u =>
           val b = new BufferedReader(new InputStreamReader(_u.openStream, "utf-8"))
           Stream.continually(b.readLine).takeWhile(_ != null).foreach { l =>
-            actor ! YahooStock(l.split(","))
+            YahooStock
+              .create(
+                (yahooResponseFormat zip l.replace("\"","").split(",")).toMap
+              ).foreach { y =>
+                actor ! y
+              }
           }
         }
       }
   }
 }
 object Yahoo {
-  lazy val actorSystem =  new spark.SparkAkka().actorSystem
+  import spark.SparkAkka._
+
   lazy val feeder = actorSystem.actorOf(Props[FeederActor], "FeederActor")
 
   def start = {

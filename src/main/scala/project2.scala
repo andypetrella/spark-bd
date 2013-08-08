@@ -4,8 +4,6 @@ import scala.collection.JavaConversions._
 
 import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 
-import com.typesafe.config._
-
 import spark.streaming.{Seconds, StreamingContext}
 import spark.streaming.StreamingContext._
 import spark.SparkContext._
@@ -29,11 +27,8 @@ object Stocks {
 }
 
 object P2 extends App {
-  //load the conf
-  val conf = ConfigFactory.load(getClass.getClassLoader);
-
   //prepare auth to twitter
-  val twitterAuth = conf.getConfig("twitter.oauth")
+  val twitterAuth = conf.root.getConfig("twitter.oauth")
 
   //init spark
   implicit val ssc = new StreamingContext("local", "Project2", Seconds(5))
@@ -45,12 +40,16 @@ object P2 extends App {
   lazy val twitter = new Twitter(twitterAuth)
   lazy val twitterDStream = twitter(topics.map(_.id)) // FIXME: only take the id for now
 
-  lazy val yahoo = new Yahoo("akka://sparkAkka@localhost:10123/user/FeederActor")
+  lazy val yahoo = new Yahoo(spark.SparkAkka.urlFor("FeederActor"))
   lazy val yahooDStream = yahoo(topics.map(_.id)) // FIXME: only take the id for now
 
   if (args(0) == "yahoo") {
     Yahoo.start
-    yahooDStream.foreach(rdd => rdd.foreach(x => println(x)))
+    yahooDStream.foreach { rdd =>
+      rdd.foreach { x =>
+        println(x.toString)
+      }
+    }
   }
 
   ssc.start()
