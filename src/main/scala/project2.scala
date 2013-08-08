@@ -56,7 +56,7 @@ object P2 extends App {
 
 
 
-  //map tweets to their sentiment score
+//map tweets to their sentiment score
 //  val statusWithSentiment = stream.map{ status =>
 //    val text = status.getText.toLowerCase
 //    val (score, words) = sentiments.foldLeft((0, List():List[String])) { case ((score, ss), (w, s)) =>
