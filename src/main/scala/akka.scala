@@ -13,5 +13,4 @@ object SparkAkka {
   lazy val actorSystem = AkkaUtils.createActorSystem(name, host, port)._1
 
   def urlFor(actorName:String) = "akka://"+name+"@"+host+":"+port+"/user/"+actorName
-
 }

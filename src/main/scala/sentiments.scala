@@ -19,8 +19,8 @@ object sentiments {
 
   def sentMatcher(w:String) =
     String.format(
-      "^(%s)$|^(%s)\\s+|\\s+(%s)$|\\s+(%s)\\s+",
-      Seq.fill(4)(w)
+      "^(%s)$|^(%s)\\s+.*|.*\\s+(%s)$|.*\\s+(%s)\\s+.*",
+      Seq.fill(4)(w):_*
     ).r
 
   def matchIt(r:Regex) = (t:String) =>
@@ -43,6 +43,4 @@ object sentiments {
         }
     }
   }
-
-
 }
