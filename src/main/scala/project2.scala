@@ -16,7 +16,7 @@ case class Stock(
   id:String,
   keywords:List[String]
 ) {
-  lazy val all = id :: keywords
+  @transient lazy val all = id :: keywords
 }
 
 object Stocks {
@@ -47,7 +47,9 @@ object P2 extends App {
   //init spark
   implicit val ssc = new StreamingContext("local", "Project2", Seconds(5))
 
-  val stocks = args.drop(1).toSeq.map(Stocks.get)
+  val action = args(0)
+  val printing = args(1) == "print"
+  val stocks = args.drop(if (printing) 2 else 1).toSeq.map(Stocks.get)
 
   lazy val twitter = new Twitter(twitterAuth)
   lazy val twitterDStream:DStream[Data] = twitter(stocks).asInstanceOf[DStream[Data]]
@@ -55,16 +57,17 @@ object P2 extends App {
   lazy val yahoo = new Yahoo(spark.SparkAkka.urlFor("FeederActor"))
   lazy val yahooDStream:DStream[Data] = yahoo(stocks).asInstanceOf[DStream[Data]]
 
-  if (args(0) == "yahoo" || args(0) == "both") {
+  if (action == "yahoo" || action == "both") {
     Yahoo.start
-    yahooDStream.foreach { rdd => rdd.foreach { x => println(x) } }
+    if (printing) yahooDStream.foreach { rdd => rdd.foreach { x => println(x) } }
   }
-  if (args(0) == "twitter" || args(0) == "both") {
-    twitterDStream.foreach { rdd => rdd.foreach { x => println(x) } }
+  if (action == "twitter" || action == "both") {
+    if (printing) twitterDStream.foreach { rdd => rdd.foreach { x => println(x) } }
   }
 
-  if (args(0) == "both") {
+  if (action == "both") {
     val both = twitterDStream union yahooDStream
+
     val asString:Data => String = (_:Data) match {
       case d:YahooData => "Yahoo at " + d.time + " change : " + d.delta
       case d:TwitterData => "Tweet by " + d.status.getUser.getName + " : " + d.status.getText
@@ -75,12 +78,27 @@ object P2 extends App {
       case x:TwitterData => if (x.sentiments.map(_.score).sum < 0) -1 else 1
     }
 
-
-    both
+    val computed = both
       .map(x => (x.stock, List(x)))
       .reduceByKeyAndWindow(_ ::: _, Seconds(60))
-      .mapValues(xs => (xs.map(score).sum, xs.map(asString)))
-      .saveAsTextFiles("scoreByStock", "last60sec")
+      //.mapValues(xs => (xs.map(score).sum, xs.map(asString)))
+      .mapValues(xs => (xs.map(score).sum, xs.foldLeft((0,0)) {
+        case ((y,t), x:YahooData) => (y+1,t)
+        case ((y,t), x:TwitterData) => (y,t+2)
+      }))
+      //.saveAsTextFiles("scoreByStock", "last60sec")
+
+    val (server, actor) = spark.SparkSpray.start()
+    computed.foreach { rdd =>
+      rdd.foreach {
+        case (stock, (score, (y,t))) =>
+          //FIXME :: Re-fetching the `actor` in the DStream function...
+          //... quick fix to avoid its serialization problem
+          spark.SparkAkka.actorSystem.actorFor(
+            spark.SparkAkka.urlFor("results")
+          ) ! (stock, score)
+      }
+    }
   }
 
   ssc.start()
