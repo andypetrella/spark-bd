@@ -81,12 +81,10 @@ object P2 extends App {
     val computed = both
       .map(x => (x.stock, List(x)))
       .reduceByKeyAndWindow(_ ::: _, Seconds(60))
-      //.mapValues(xs => (xs.map(score).sum, xs.map(asString)))
       .mapValues(xs => (xs.map(score).sum, xs.foldLeft((0,0)) {
         case ((y,t), x:YahooData) => (y+1,t)
-        case ((y,t), x:TwitterData) => (y,t+2)
+        case ((y,t), x:TwitterData) => (y,t+1)
       }))
-      //.saveAsTextFiles("scoreByStock", "last60sec")
 
     val (server, actor) = spark.SparkSpray.start()
     computed.foreach { rdd =>
