@@ -65,7 +65,7 @@ class YahooActorReceiver(feeder:String, stocks:Seq[Stock]) extends Actor with Re
       lasts = lasts + (y.stock.id -> y)
 
       if (push) {
-        context.parent ! pushBlock(y)
+        pushBlock(y)
       }
     }
   }
