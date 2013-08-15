@@ -56,9 +56,7 @@ class YahooActorReceiver(feeder:String, stocks:Seq[Stock]) extends Actor with Re
   override def preStart = remotePublisher ! For(context.self, stocks)
 
   def receive = {
-    case msg ⇒ {
-      val y = msg.asInstanceOf[YahooData]
-
+    case y:YahooData ⇒ {
       val push = lasts
                   .get(y.stock.id)
                   .map(_ != y)
@@ -88,6 +86,20 @@ class FeederActor extends Actor {
 
   var ref:Option[ActorRef] = None
 
+  def consume(actor:ActorRef, url:URL):Stream[YahooData] = {
+    import java.io.{BufferedReader, InputStreamReader}
+    val b = new BufferedReader(new InputStreamReader(url.openStream, "utf-8"))
+    Stream
+      .continually(b.readLine)
+      .takeWhile(_ != null)
+      .map { l =>
+        YahooData.create((yahooResponseFormat zip l.replace("\"","").split(",")).toMap)
+      }
+      .collect {
+        case Some(y) => y
+      }
+  }
+
   def receive = {
 
     case For(sparkled, stocks)  =>
@@ -95,20 +107,10 @@ class FeederActor extends Actor {
       url = Some(new URL(financeData(stocks.map(_.id))))
 
     case Tick           =>
-      ref.foreach { actor =>
-        import java.io._
-        url.foreach { _u =>
-          val b = new BufferedReader(new InputStreamReader(_u.openStream, "utf-8"))
-          Stream.continually(b.readLine).takeWhile(_ != null).foreach { l =>
-            YahooData
-              .create(
-                (yahooResponseFormat zip l.replace("\"","").split(",")).toMap
-              ).foreach { y =>
-                actor ! y
-              }
-          }
-        }
-      }
+      for {
+        actor <- ref
+        u     <- url
+      } consume(actor, u).foreach(actor ! _)
   }
 }
 
