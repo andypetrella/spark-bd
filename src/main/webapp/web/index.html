@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html ng-app="spark">
+<head>
+  <title>Project 2 using Spark</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.0.7/angular.min.js"></script>
+  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <script src="/web/js/app.js"></script>
+  <style type="text/css">
+    .line {
+      stroke: black;
+      stroke-width: 2px;
+      fill: none;
+    }
+  </style>
+</head>
+<body>
+<h1>Project 2 using Spark</h1>
+<div ng-controller="SparkCtrl">
+  <span ng-click="start()">start</span><br/>
+  <span ng-click="stop()">stop</span><br/>
+</div>
+<div ng-controller="StockCtrl">
+  <ul class="unstyled">
+    <li ng-repeat="stock in stocks">
+      <span>{{stock.id}}</span>
+    </li>
+  </ul>
+  <form ng-submit="addStock()">
+    <input type="text" ng-model="stockId"  size="30"
+           placeholder="add new stock here">
+    <input class="btn-primary" type="submit" value="add">
+  </form>
+</div>
+<div mood-chart ng-controller="ResultsCtrl"></div>
+</body>
+</html>
