@@ -1,7 +1,13 @@
 spark-bd
 ========
 
-Exploration of spark streaming based on the BigData.be project 2
+Exploration of spark streaming based on the BigData.be project 2.
+
+I also tried to relate some of the work done here in my blog. See [this page](http://ska-la.blogspot.be/2013/08/mid-2013-my-spark-odyssey.html) for the very first post.
+
+
+Configure
+---------
 
 To configure twitter, two options:
 * edit application.conf and set oauth2 required information
@@ -11,15 +17,30 @@ To configure twitter, two options:
   * TWITTER_OAUTH_ACC_TKN = access token
   * TWITTER_OAUTH_TKN_SEC = access token secret
 
-To run it
+Launch
+------
+
+To run it (see below for a version using the embedded webapp)
+
 > sbt
 
 > run-main be.bigdata.p2.P2 both GOOG AAPL ORCL YHOO CSCO INTL AMD IBM HPQ MSFT
+
+> curl http://localhost:10124/start
+
+to stop it
+
+> curl http://localhost:10124/stop
+
+
 
 For now, it will simply compute a score every 60" based on streamed information it got from twitter and the yahoo finance csv (that it requests as often as possible).
 
 These computation are sent to an actor that holds the timeline of each stock. Note: the timeline is composed of the windowed computation of 60" based period, and the RDD are 5" length; 
 so there is an overlap between windows. That says that the new scores aren't added to the previous one, but each window constitute an estimation of the variation in the mood.
+
+Embedded webapp
+---------------
 
 A spray server is started on the address [http://localhost:10124](http://localhost:10124), the "/results" route is dedicated to fetching all timelines kept by the above actor.
 
