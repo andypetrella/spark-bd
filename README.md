@@ -35,12 +35,12 @@ So the start time is delayed until the `start` value on the `P2` object is acces
 However, these calls are enabled through the UI (two buttons in the navbar).
 
 To recap: 
-* `run-main be.bigdata.p2.P2 both GOOG AAPL ORCL YHOO CSCO INTL AMD IBM HPQ MSFT`
-* go to [http://localhost:10124/web/index.html](http://localhost:10124/web/index.html)
-* click on **start**
-* see the analysis performing in realtime in the graph
-* click on **stop**
-* go to 1/ to restart everything
+1. `run-main be.bigdata.p2.P2 both GOOG AAPL ORCL YHOO CSCO INTL AMD IBM HPQ MSFT`
+2. go to [http://localhost:10124/web/index.html](http://localhost:10124/web/index.html)
+3. click on **start**
+4. see the analysis performing in realtime in the graph
+5. click on **stop**
+6. go to 1/ to restart everything
 
 Actually, the realtime graph is constructed using another end-point in the Spray route `/after?time={arg}`. Calling this route will retrieve and serialize all events since the specified time parameter,
 zero if none. Additionaly, it'll return the latest date when the server has create a value -- helpful for the next call.
