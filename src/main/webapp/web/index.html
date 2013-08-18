@@ -1,36 +1,61 @@
 <!DOCTYPE html>
 <html ng-app="spark">
+
 <head>
   <title>Project 2 using Spark</title>
-  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.0.7/angular.min.js"></script>
-  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
-  <script src="/web/js/app.js"></script>
+
+  <link href="/web/bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
   <style type="text/css">
     .line {
-      stroke: black;
       stroke-width: 2px;
       fill: none;
     }
   </style>
+
+  <script src="http://code.jquery.com/jquery.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.0.7/angular.min.js"></script>
+  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <script src="/web/bootstrap/js/bootstrap.min.js"></script>
+  <script src="/web/js/app.js"></script>
+
 </head>
+
 <body>
-<h1>Project 2 using Spark</h1>
-<div ng-controller="SparkCtrl">
-  <span ng-click="start()">start</span><br/>
-  <span ng-click="stop()">stop</span><br/>
-</div>
-<div ng-controller="StockCtrl">
-  <ul class="unstyled">
-    <li ng-repeat="stock in stocks">
-      <span>{{stock.id}}</span>
-    </li>
-  </ul>
-  <form ng-submit="addStock()">
-    <input type="text" ng-model="stockId"  size="30"
-           placeholder="add new stock here">
-    <input class="btn-primary" type="submit" value="add">
-  </form>
-</div>
-<div mood-chart ng-controller="ResultsCtrl"></div>
+
+ <div class="navbar navbar-inverse navbar-fixed-top">
+    <div class="navbar-inner">
+      <div class="container" ng-controller="SparkCtrl">
+        <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+          <span class="icon-bar"></span>
+        </button>
+        <a class="brand" href="#">Project 2 using Spark</a>
+        <div class="nav-collapse collapse">
+          <ul class="nav">
+            <li><a href="#"><span ng-click="start()">Start</span></a></li>
+            <li><a href="#"><span ng-click="stop()">Stop</span></a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </div>
+  </div>
+  <div class="container">
+      <div class="hero-unit">
+        <h1>Real Time moods</h1>
+      </div>
+      <div mood-chart ng-controller="ResultsCtrl">
+        <div class="row">
+          <div class="span2 legend">
+          </div>
+          <div class="span10 graph">
+          </div>
+        </div>
+      </div>
+
+  </div>
+
+
 </body>
+
 </html>
