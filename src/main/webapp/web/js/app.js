@@ -4,19 +4,39 @@ directive('moodChart', function() {
   return {
     restrict: 'A',
     link: function(scope, element) {
-      var m = [20, 20, 30, 20],
+      var m = [20, 20, 60, 30],
           w = 730 - m[1] - m[3],
-          h = 400 - m[0] - m[2];
+          h = 450 - m[0] - m[2];
       var color = d3.scale.category20();
 
-      var start = new Date().getTime();
-      var x = d3.scale.linear()
-                      .domain([start-10, start+(10*60*1000)+10])
+      var start = new Date();
+      var x = d3.time.scale()
+                      .domain([new Date(start.getTime()-(10*60*1000)), start])
                       .range([0, w - 60]);
 
       var y = d3.scale.linear()
-                      .domain([-150, 150])
+                      .domain([-10, 10])
                       .range([h, 0]);
+
+      var xAxis = d3.svg.axis()
+                        .scale(x)
+                        .orient("bottom")
+                        .ticks(10)
+                        .tickFormat(function(d) {
+                          d = (x.domain()[1] - d)/1000;
+                          var s = "";
+                          if (d > 60) {
+                            var div = Math.floor(d / 60);
+                            s += div+"m ";
+                            d = d%60;
+                          }
+                          return "- "+s+Math.floor(d) + "s";
+                        });
+
+      var yAxis = d3.svg.axis()
+                        .scale(y)
+                        .orient("left")
+                        .ticks(20);
 
       var d3element = d3.select(element.get(0));
 
@@ -32,11 +52,21 @@ directive('moodChart', function() {
                     .append("svg:g")
                       .attr("transform", "translate("+m[3]+","+m[0]+")");
 
+      svg.append("g")
+          .attr("class", "x axis")
+          .call(xAxis)
+          .attr("transform", "translate(0, "+h+")")
+          .selectAll("text")
+            .attr("transform", "rotate(90, 6,6) translate(30, 0)");
+
+      svg.append("g")
+          .attr("class", "y axis")
+          .call(yAxis);
+
       var line = d3.svg.line()
           .interpolate("basis")
           .x(function(d) {
-            return x(d.time);
-            //return d.time;
+            return x(new Date(d.time));
           })
           .y(function(d) {
             return y(d.score);
@@ -58,12 +88,13 @@ directive('moodChart', function() {
       scope.$watch('timelines', function (ts) {
         var timelines = d3.entries(ts);
 
-        x.domain([scope.maxTime-(10*60*1000-10), scope.maxTime+10]);
+        x.domain([new Date(scope.maxTime-(10*60*1000)), new Date(scope.maxTime)])
 
         var yOldDomain = y.domain();
         var yDomain = d3.extent(flatten(timelines.map(function(i) {return i.value;})), function(i) { return i.score});
         if (yOldDomain[0] != yDomain[0] || yOldDomain[1] != yDomain[1]) {
           y.domain(yDomain);
+          svg.select("g.y.axis").call(yAxis);
         }
 
         angular.forEach(timelines, function(t) {
