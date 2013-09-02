@@ -29,7 +29,8 @@ object SparkSpray extends Directives {
       def read(value: JsValue) =
         value.asJsObject.getFields("id", "keywords") match {
           case Seq(JsString(id), JsArray(keywords)) =>
-            Stock(id, keywords.collect { case JsString(s) => s })
+            val s = Stocks.get(id)
+            s.copy(keywords = s.keywords ++ keywords.collect { case JsString(s) => s })
           case _ => throw new DeserializationException("Stock expected")
         }
     }

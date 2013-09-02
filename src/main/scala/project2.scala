@@ -12,34 +12,6 @@ trait Data {
   def stock: Stock
 }
 
-case class Stock(
-  id:String,
-  keywords:List[String]
-) {
-  @transient lazy val all = id :: keywords
-}
-
-object Stocks {
-  private[this] val seq = Seq(
-    Stock("GOOG", List("google", "android", "chrome")),
-    Stock("AAPL", List("apple", "ios", "iphone", "ipad")),
-    Stock("ORCL", List("oracle", "java", "mysql")),
-    Stock("YHOO", List("yahoo")),
-    Stock("CSCO", List("cisco")),
-    Stock("INTL", List("intel")),
-    Stock("AMD", Nil),
-    Stock("IBM", Nil),
-    Stock("MSFT", List("Microsoft", "Windows"))
-  )
-
-  private[this] val defaults = seq.map(x => (x.id, x)).toMap
-
-  def get(s:String) = defaults.get(s).getOrElse(Stock(s, Nil))
-}
-
-object Tick
-case class For(actor:ActorRef, stocks:Seq[Stock])
-
 object P2 extends App {
   //start the spray server
   val (server, actor) = spark.SparkSpray.start()
@@ -51,18 +23,29 @@ object P2 extends App {
   //prepare auth to twitter
   val twitterAuth = conf.root.getConfig("twitter.oauth")
 
-  //init spark
-  implicit val ssc = new StreamingContext("local", "Project2", Seconds(5))
+  val deploy = args(0)
 
-  val action = args(0)
-  val printing = args(1) == "print"
-  val stocks = args.drop(if (printing) 2 else 1).toSeq.map(Stocks.get)
+  //init spark
+  implicit val ssc = deploy match {
+    case "local" =>
+      new StreamingContext("local", "Project2", Seconds(5))
+    case x       =>
+      val c = x.split(";")
+      // spark://noootsab:7077
+      // /home/noootsab/src/github/spark
+      // p2.jar;...
+      new StreamingContext(c(0), "Project2", Seconds(5), c(1), c.drop(2).toList)
+  }
+
+  val action = args(1)
+  val printing = args(2) == "print"
+//  val stocks = args.drop(if (printing) 3 else 2).toSeq.map(Stocks.get)
 
   lazy val twitter = new Twitter(twitterAuth)
-  lazy val twitterDStream:DStream[Data] = twitter(stocks).asInstanceOf[DStream[Data]]
+  lazy val twitterDStream:DStream[Data] = twitter(Stocks.hard).asInstanceOf[DStream[Data]]
 
   lazy val yahoo = new Yahoo(spark.SparkAkka.urlFor("FeederActor"))
-  lazy val yahooDStream:DStream[Data] = yahoo(stocks).asInstanceOf[DStream[Data]]
+  lazy val yahooDStream:DStream[Data] = yahoo(Stocks.hard).asInstanceOf[DStream[Data]]
 
 
   lazy val start = {

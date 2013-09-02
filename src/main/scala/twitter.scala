@@ -26,7 +26,7 @@ class Twitter(twitterConfig:Config) {
 
   def apply(stocks:Seq[Stock])(implicit ssc:StreamingContext) = {
     //create twitter stream using filter from the args list
-    val stream = ssc.twitterStream(None, stocks.flatMap(_.all))
+    val stream = ssc.twitterStream(None)//, stocks.flatMap(_.all))
 
     //map tweets to their sentiments, then collapse all non relevant tweets (no matching sentiment)
     val statusWithNotEmptySentiments =

@@ -5,12 +5,19 @@ import akka.util.duration._
 
 import com.typesafe.config._
 
-import akka.actor.{Actor, ActorRef, Props}
+import akka.actor.{Actor, ActorRef, Props, PoisonPill}
 
 import spark.streaming.{Seconds, StreamingContext}
 import spark.streaming.StreamingContext._
 import spark.streaming.receivers.Receiver
 import spark.SparkContext._
+
+import java.net.URL
+
+
+object Tick
+case class For(actor:ActorRef, stocks:Seq[Stock])
+case class Consume(actor:ActorRef, url:URL)
 
 case class YahooData(
   stock:Stock,
@@ -74,43 +81,70 @@ class YahooActorReceiver(feeder:String, stocks:Seq[Stock]) extends Actor with Re
 }
 
 class FeederActor extends Actor {
-  import java.net.URL
-
   // http://cliffngan.net/a/13
   val yahooResponseFormat = List("e1", "s", "l1", "d1", "t1", "c6", "p2", "v")
-  val yahooService        = "http://finance.yahoo.com/d/quotes.csv?s=%s&f=%s&e=.csv";
+  val yahooService        = "http://finance.yahoo.com/d/quotes.csv?f=%s&e=.csv&s=";
+  val yahooUrlTmpl        = String.format(yahooService, yahooResponseFormat.mkString)
+  //def financeData(stocks:Seq[String]) = String.format(yahooService, stocks.mkString(","), yahooResponseFormat.mkString)
 
-  def financeData(stocks:Seq[String]) = String.format(yahooService, stocks.mkString(","), yahooResponseFormat.mkString)
 
-  var url:Option[URL] = None
+  var urls:Option[Seq[URL]] = None
 
   var ref:Option[ActorRef] = None
 
-  def consume(actor:ActorRef, url:URL):Stream[YahooData] = {
-    import java.io.{BufferedReader, InputStreamReader}
-    val b = new BufferedReader(new InputStreamReader(url.openStream, "utf-8"))
-    Stream
-      .continually(b.readLine)
-      .takeWhile(_ != null)
-      .map { l =>
-        YahooData.create((yahooResponseFormat zip l.replace("\"","").split(",")).toMap)
-      }
-      .collect {
-        case Some(y) => y
-      }
+  private[this] def urlFriendlySeq(s:Seq[String], append:(String, String)=>String)(base:String, size:Int=1024):Seq[String] = {
+    s.foldLeft(Nil:List[String]) {
+      case (Nil, s) => List(append(base, s)) //case where s too long not handled :-/
+      case (l, s) =>
+        val x = l.head
+        val xs = l.tail
+        append(x, s) match {
+          case a if a.length > size => append(base, s) :: l //case where s too long not handled :-/
+          case a                    => a :: xs
+        }
+    }
+    .toSeq
   }
+
+  private[this] def splitYUrls(stocks:List[String]):Seq[String] = {
+    assert(yahooUrlTmpl.endsWith("="))
+    urlFriendlySeq(stocks, (b:String, s:String) => if (b.endsWith("=")) b+s else b+"+"+s)(yahooUrlTmpl)
+  }
+
 
   def receive = {
 
     case For(sparkled, stocks)  =>
       ref = Some(sparkled)
-      url = Some(new URL(financeData(stocks.map(_.id))))
+      urls = Some(splitYUrls(stocks.map(_.id).toList).map(x => new URL(x)))
 
     case Tick           =>
       for {
         actor <- ref
-        u     <- url
-      } consume(actor, u).foreach(actor ! _)
+        us    <- urls
+      } {
+        val n = System.nanoTime
+        us.zipWithIndex.foreach { case (u, i) =>
+          val a = context.actorOf(Props[FeederActor], "FeederActor-"+n+"-"+i)
+          a ! Consume(actor, u)
+        }
+      }
+
+    case Consume(actor, url) => {
+      import java.io.{BufferedReader, InputStreamReader}
+      val b = new BufferedReader(new InputStreamReader(url.openStream, "utf-8"))
+      Stream
+        .continually(b.readLine)
+        .takeWhile(_ != null)
+        .map { l =>
+          YahooData.create((yahooResponseFormat zip l.replace("\"","").split(",")).toMap)
+        }
+        .foreach {
+          case None    => ()
+          case Some(y) => actor ! y
+        }
+      self ! PoisonPill
+    }
   }
 }
 
